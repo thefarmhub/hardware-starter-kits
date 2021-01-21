@@ -3,10 +3,7 @@
 #include <Wire.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
-#include <MQTTClient.h>
-
-WiFiClientSecure net = WiFiClientSecure();
-MQTTClient client = MQTTClient(256);
+#include <PubSubClient.h> // https://github.com/knolleary/pubsubclient
 
 Ezo_board PH = Ezo_board(99, "PH");
 Ezo_board EC = Ezo_board(100, "EC");
@@ -20,6 +17,9 @@ const int EN_PH = 14;
 const int EN_EC = 12;
 const int EN_RTD = 15;
 const int EN_AUX = 13;
+
+// TODO:
+//  - add reconnect for client https://github.com/knolleary/pubsubclient/blob/master/examples/mqtt_esp8266/mqtt_esp8266.ino
 
 // The board we're talking to
 Ezo_board *default_board = &device_list[0];
@@ -41,6 +41,13 @@ const unsigned long short_delay = 300;
 
 // This is the calculated delay to add to final reading
 unsigned int poll_delay = publish_delay - reading_delay * 2 - short_delay;
+
+WiFiClientSecure net;
+PubSubClient client(net);
+
+BearSSL::X509List cert(AWS_CERT_CA);
+BearSSL::X509List client_crt(AWS_CERT_CRT);
+BearSSL::PrivateKey key(AWS_CERT_PRIVATE);
 
 void connect_wifi()
 {
@@ -67,12 +74,11 @@ void connect_wifi()
 void connect_aai()
 {
     // Configure WiFiClientSecure to use the AWS IoT device credentials
-    net.setCACert(AWS_CERT_CA);
-    net.setCertificate(AWS_CERT_CRT);
-    net.setPrivateKey(AWS_CERT_PRIVATE);
+    net.setTrustAnchors(&cert);
+    net.setClientRSACert(&client_crt, &key);
 
     // Connect to the MQTT broker on the AWS endpoint we defined earlier
-    client.begin(AWS_IOT_ENDPOINT, 8883, net);
+    client.setServer(AWS_IOT_ENDPOINT, 8883);
 
     Serial.print("Connecting to Aquaponics AI");
 
@@ -151,7 +157,7 @@ void loop()
                 EC.send_cmd_with_num("T,", RTD.get_last_received_reading());
                 DO.send_cmd_with_num("T,", RTD.get_last_received_reading());
 
-                publish(TOPIC_TEMP, String(RTD.get_last_received_reading(), 2))
+                publish_topic(TOPIC_TEMP, String(RTD.get_last_received_reading(), 2));
             }
 
             // If the temperature reading is invalid
@@ -180,19 +186,19 @@ void loop()
             load_reading(PH);
             if (PH.get_error() == Ezo_board::SUCCESS)
             {
-                publish(TOPIC_PH, String(PH.get_last_received_reading(), 2))
+                publish_topic(TOPIC_PH, String(PH.get_last_received_reading(), 2));
             }
 
             load_reading(EC);
             if (EC.get_error() == Ezo_board::SUCCESS)
             {
-                publish(TOPIC_EC, String(EC.get_last_received_reading(), 2))
+                publish_topic(TOPIC_EC, String(EC.get_last_received_reading(), 2));
             }
 
             load_reading(DO);
             if (DO.get_error() == Ezo_board::SUCCESS)
             {
-                publish(TOPIC_DO, String(DO.get_last_received_reading(), 2))
+                publish_topic(TOPIC_DO, String(DO.get_last_received_reading(), 2));
             }
 
             Serial.println();
@@ -216,17 +222,34 @@ void load_reading(Ezo_board &Device)
     print_error_type(Device, String(Device.get_last_received_reading(), 2).c_str());
 }
 
-void publish(topic, value)
+void print_error_type(Ezo_board &Device, const char* success_string) {
+  switch (Device.get_error()) {
+    case Ezo_board::SUCCESS:
+      Serial.print(success_string);
+      break;
+
+    case Ezo_board::FAIL:
+      Serial.print("Failed ");
+      break;
+
+    case Ezo_board::NOT_READY:
+      Serial.print("Pending ");
+      break;
+
+    case Ezo_board::NO_DATA:
+      Serial.print("No Data ");
+      break;
+  }
+}
+
+void publish_topic(const char* topic, String value)
 {
     if (WiFi.status() == WL_CONNECTED)
     {
         Serial.print("Sending to Aquaponics AI: ");
 
-        data = String("{\"v\":");
-        data += value;
-        data += "}";
-
-        client.publish(topic, data);
+        String payload = "{\"v\":" + value + "}";
+        client.publish(topic, payload.c_str());
 
         Serial.println("success");
     }
