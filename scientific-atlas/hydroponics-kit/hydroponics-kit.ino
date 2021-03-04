@@ -17,7 +17,6 @@ BearSSL::PrivateKey key(AAI_CERT_PRIVATE);
 
 Ezo_board PH = Ezo_board(99, "PH");
 Ezo_board EC = Ezo_board(100, "EC");
-Ezo_board DO = Ezo_board(97, "DO");
 Ezo_board RTD = Ezo_board(102, "RTD");
 Ezo_board PMP = Ezo_board(103, "PMP");
 
@@ -25,7 +24,6 @@ Ezo_board device_list[] = {
     PH,
     EC,
     RTD,
-    DO,
     PMP};
 
 Ezo_board *default_board = &device_list[0];
@@ -84,11 +82,9 @@ void setup()
     pinMode(EN_PH, OUTPUT);
     pinMode(EN_EC, OUTPUT);
     pinMode(EN_RTD, OUTPUT);
-    pinMode(EN_AUX, OUTPUT);
     digitalWrite(EN_PH, LOW);
     digitalWrite(EN_EC, LOW);
     digitalWrite(EN_RTD, HIGH);
-    digitalWrite(EN_AUX, LOW);
 
     Wire.begin();
     Serial.begin(9600);
@@ -177,13 +173,11 @@ void step2()
     {
         PH.send_cmd_with_num("T,", RTD.get_last_received_reading());
         EC.send_cmd_with_num("T,", RTD.get_last_received_reading());
-        DO.send_cmd_with_num("T,", RTD.get_last_received_reading());
     }
     else
     {
         PH.send_cmd_with_num("T,", 25.0);
         EC.send_cmd_with_num("T,", 25.0);
-        DO.send_cmd_with_num("T,", 20.0);
     }
 
     Serial.print(" ");
@@ -191,9 +185,9 @@ void step2()
 
 void step3()
 {
+
     PH.send_read_cmd();
     EC.send_read_cmd();
-    DO.send_read_cmd();
 }
 
 void step4()
@@ -202,9 +196,6 @@ void step4()
 
     Serial.print("  ");
     receive_and_print_reading(EC);
-
-    Serial.print("  ");
-    receive_and_print_reading(DO);
 
     Serial.println();
     pump_function(PUMP_BOARD, EZO_BOARD, COMPARISON_VALUE, PUMP_DOSE, IS_GREATER_THAN);
@@ -278,10 +269,6 @@ void print_help()
     Serial.println(F("ph:cal,low,4     calibrate to pH 4                                         "));
     Serial.println(F("ph:cal,high,10   calibrate to pH 10                                        "));
     Serial.println(F("ph:cal,clear     clear calibration                                         "));
-    Serial.println(F("                                                                           "));
-    Serial.println(F("do:cal               calibrate DO probe to the air                         "));
-    Serial.println(F("do:cal,0             calibrate DO probe to O dissolved oxygen              "));
-    Serial.println(F("do:cal,clear         clear calibration                                     "));
     Serial.println(F("                                                                           "));
     Serial.println(F("ec:cal,dry           calibrate a dry EC probe                              "));
     Serial.println(F("ec:k,[n]             used to switch K values, standard probes values are 0.1, 1, and 10 "));
@@ -381,16 +368,6 @@ void aai_send()
             if (PH.get_error() == Ezo_board::SUCCESS)
             {
                 aai_publish(TOPIC_PH, String(PH.get_last_received_reading(), 2));
-            }
-            else
-            {
-                Serial.println("reading error");
-            }
-
-            Serial.print("DO: ");
-            if (DO.get_error() == Ezo_board::SUCCESS)
-            {
-                aai_publish(TOPIC_DO, String(DO.get_last_received_reading(), 2));
             }
             else
             {

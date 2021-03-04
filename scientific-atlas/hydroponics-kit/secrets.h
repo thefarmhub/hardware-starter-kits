@@ -5,9 +5,6 @@ const char* WIFI_PASSWORD = "XXXXXXXX";
 // Sensor ID from the dashboard
 const char THINGNAME[] = "sensor-XXXXXXXXXXX";
 
-// Topic ID: Dissolved Oxygen
-const char TOPIC_DO[] = "logs/XXXXXXXXXXXXXXXX";
-
 // Topic ID: pH
 const char TOPIC_PH[] = "logs/XXXXXXXXXXXXXXXX";
 
