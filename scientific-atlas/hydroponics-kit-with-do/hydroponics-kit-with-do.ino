@@ -386,7 +386,13 @@ void aai_publish(const char *topic, String value)
         return;
     }
 
-    String payload = "{\"v\":" + value + "}";
+    time_t now;
+    time(&now);
+    char buf[sizeof "2020-01-01T00:00:01Z"];
+    strftime(buf, sizeof buf, "%FT%TZ", gmtime(&now));
+    
+    String payload = "{\"v\":" + value + ",\"dt\":\"" + buf + "\"}";
+    Serial.println(payload);
     if (pubsubClient.publish(topic, payload.c_str()))
     {
         Serial.println("success");
