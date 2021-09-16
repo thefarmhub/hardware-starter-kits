@@ -45,7 +45,7 @@ rqXRfboQnoZsG4q5WTP468SQvvG5
 -----END CERTIFICATE-----
 )EOF";
 
-const char AAI_IOT_ENDPOINT[] = "a2ymbm509llr2o-ats.iot.us-east-1.amazonaws.com";
+const char AAI_IOT_ENDPOINT[] = "iot.aquaponics.ai";
 // ------------ End Configuration ------------ //
 
 WiFiClientSecure wifiClient;
