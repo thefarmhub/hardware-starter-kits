@@ -8,8 +8,8 @@
 #include <PubSubClient.h> // https://github.com/knolleary/pubsubclient
 
 // ------------ Start Configuration ------------ //
-const char* WIFI_SSID = "";
-const char* WIFI_PASSWORD = "";
+const char *WIFI_SSID = "";
+const char *WIFI_PASSWORD = "";
 const char THINGNAME[] = "";
 const char TOPIC_PH[] = "";
 const char TOPIC_EC[] = "";
@@ -44,7 +44,7 @@ rqXRfboQnoZsG4q5WTP468SQvvG5
 -----END CERTIFICATE-----
 )EOF";
 
-const char AAI_IOT_ENDPOINT[] = "iot.aquaponics.ai";
+const char AAI_IOT_ENDPOINT[] = "iot.farmhub.ag";
 // ------------ End Configuration ------------ //
 
 WiFiClientSecure wifiClient;
@@ -75,7 +75,7 @@ const int EN_RTD = 15;
 const int EN_AUX = 13;
 
 const unsigned long reading_delay = 1000;
-const unsigned long aai_delay = 15000;
+const unsigned long farmhub_delay = 15000;
 
 unsigned int poll_delay = 2000 - reading_delay * 2 - 300;
 
@@ -88,7 +88,7 @@ unsigned int poll_delay = 2000 - reading_delay * 2 - 300;
 float k_val = 0;
 
 bool polling = true;
-bool send_to_aai = true;
+bool send_to_farmhub = true;
 
 bool wifi_isconnected()
 {
@@ -109,12 +109,12 @@ void step2();
 void step3();
 void step4();
 Sequencer4 sensor_sequence(&step1, reading_delay,
-                            &step2, 300,
-                            &step3, reading_delay,
-                            &step4, poll_delay);
+                           &step2, 300,
+                           &step3, reading_delay,
+                           &step4, poll_delay);
 
 Sequencer1 wifi_sequence(&reconnect_wifi, 10000);
-Sequencer1 aai_sequence(&aai_send, aai_delay);
+Sequencer1 farmhub_sequence(&farmhub_send, farmhub_delay);
 
 void setup()
 {
@@ -132,7 +132,7 @@ void setup()
 
     wifi_sequence.reset();
     sensor_sequence.reset();
-    aai_sequence.reset();
+    farmhub_sequence.reset();
 
     reconnect_wifi();
     set_clock();
@@ -147,7 +147,7 @@ void loop()
     if (receive_command(cmd))
     {
         polling = false;
-        send_to_aai = false;
+        send_to_farmhub = false;
         if (!process_coms(cmd))
         {
             process_command(cmd, device_list, device_list_len, default_board);
@@ -157,7 +157,7 @@ void loop()
     if (polling == true)
     {
         sensor_sequence.run();
-        aai_sequence.run();
+        farmhub_sequence.run();
     }
 }
 
@@ -243,8 +243,8 @@ void step4()
 void start_datalogging()
 {
     polling = true;
-    send_to_aai = true;
-    aai_sequence.reset();
+    send_to_farmhub = true;
+    farmhub_sequence.reset();
 }
 
 bool process_coms(const String &string_buffer)
@@ -300,7 +300,7 @@ void print_help()
     get_ec_k_value();
     Serial.println(F("Atlas Scientific I2C hydroponics kit                                       "));
     Serial.println(F("Commands:                                                                  "));
-    Serial.println(F("datalog      Takes readings of all sensors every 15 sec send to Aquaponics AI "));
+    Serial.println(F("datalog      Takes readings of all sensors every 15 sec send to FarmHub "));
     Serial.println(F("             Entering any commands stops datalog mode.                     "));
     Serial.println(F("poll         Takes readings continuously of all sensors                    "));
     Serial.println(F("                                                                           "));
@@ -338,11 +338,11 @@ void print_help()
     Serial.println(F("rtd:cal,clear        clear calibration                                     "));
 }
 
-void aai_connect()
+void farmhub_connect()
 {
     while (!pubsubClient.connected())
     {
-        Serial.print("Connecting to Aquaponics AI... ");
+        Serial.print("Connecting to FarmHub... ");
 
         wifiClient.setTrustAnchors(&cert);
         wifiClient.setClientRSACert(&client_crt, &key);
@@ -363,7 +363,7 @@ void aai_connect()
         }
     }
 }
-void aai_publish(const char *topic, String value)
+void farmhub_publish(const char *topic, String value)
 {
     if (value == "")
     {
@@ -375,7 +375,7 @@ void aai_publish(const char *topic, String value)
     time(&now);
     char buf[sizeof "2020-01-01T00:00:01Z"];
     strftime(buf, sizeof buf, "%FT%TZ", gmtime(&now));
-    
+
     String payload = "{\"v\":" + value + ",\"dt\":\"" + buf + "\"}";
     Serial.println(payload);
     if (pubsubClient.publish(topic, payload.c_str()))
@@ -388,20 +388,20 @@ void aai_publish(const char *topic, String value)
     }
 }
 
-void aai_send()
+void farmhub_send()
 {
-    if (send_to_aai == true)
+    if (send_to_farmhub == true)
     {
-        aai_connect();
+        farmhub_connect();
 
         if (wifi_isconnected())
         {
-            Serial.println("Sending data to Aquaponics AI...");
+            Serial.println("Sending data to FarmHub...");
 
             Serial.print("EC: ");
             if (EC.get_error() == Ezo_board::SUCCESS)
             {
-                aai_publish(TOPIC_EC, String(EC.get_last_received_reading(), 2));
+                farmhub_publish(TOPIC_EC, String(EC.get_last_received_reading(), 2));
             }
             else
             {
@@ -411,7 +411,7 @@ void aai_send()
             Serial.print("PH: ");
             if (PH.get_error() == Ezo_board::SUCCESS)
             {
-                aai_publish(TOPIC_PH, String(PH.get_last_received_reading(), 2));
+                farmhub_publish(TOPIC_PH, String(PH.get_last_received_reading(), 2));
             }
             else
             {
@@ -423,11 +423,11 @@ void aai_send()
             {
                 if (RTD.get_last_received_reading() > -1000.0)
                 {
-                    aai_publish(TOPIC_TEMP, String(RTD.get_last_received_reading(), 2));
+                    farmhub_publish(TOPIC_TEMP, String(RTD.get_last_received_reading(), 2));
                 }
                 else
                 {
-                    aai_publish(TOPIC_TEMP, String(25.0));
+                    farmhub_publish(TOPIC_TEMP, String(25.0));
                 }
             }
             else
