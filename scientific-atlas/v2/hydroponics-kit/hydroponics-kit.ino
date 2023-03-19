@@ -298,3 +298,122 @@ void print_help() {
   Serial.println(F("                     t= the temperature you have chosen                    "));
   Serial.println(F("rtd:cal,clear        clear calibration                                     "));
 }
+
+
+void aai_connect()
+{
+    while (!pubsubClient.connected())
+    {
+        Serial.print("Connecting to Aquaponics AI... ");
+
+        wifiClient.setTrustAnchors(&cert);
+        wifiClient.setClientRSACert(&client_crt, &key);
+
+        pubsubClient.setServer(AAI_IOT_ENDPOINT, 8883);
+
+        if (pubsubClient.connect(THINGNAME))
+        {
+            Serial.println("success");
+        }
+        else
+        {
+            Serial.print("failed, rc=");
+            Serial.print(pubsubClient.state());
+            Serial.println(" trying again in 5 seconds");
+
+            delay(5000);
+        }
+    }
+}
+void aai_publish(const char *topic, String value)
+{
+    if (value == "")
+    {
+        Serial.println("failed [empty value]");
+        return;
+    }
+
+    time_t now;
+    time(&now);
+    char buf[sizeof "2020-01-01T00:00:01Z"];
+    strftime(buf, sizeof buf, "%FT%TZ", gmtime(&now));
+
+    String payload = "{\"v\":" + value + ",\"dt\":\"" + buf + "\"}";
+    Serial.println(payload);
+    if (pubsubClient.publish(topic, payload.c_str()))
+    {
+        Serial.println("success");
+    }
+    else
+    {
+        Serial.println("failed");
+    }
+}
+
+void aai_send()
+{
+    if (send_to_aai == true)
+    {
+        aai_connect();
+
+        if (wifi_isconnected())
+        {
+            Serial.println("Sending data to Aquaponics AI...");
+
+            Serial.print("EC: ");
+            if (EC.get_error() == Ezo_board::SUCCESS)
+            {
+                aai_publish(TOPIC_EC, String(EC.get_last_received_reading(), 2));
+            }
+            else
+            {
+                Serial.println("reading error");
+            }
+
+            Serial.print("PH: ");
+            if (PH.get_error() == Ezo_board::SUCCESS)
+            {
+                aai_publish(TOPIC_PH, String(PH.get_last_received_reading(), 2));
+            }
+            else
+            {
+                Serial.println("reading error");
+            }
+
+            Serial.print("RTD: ");
+            if (RTD.get_error() == Ezo_board::SUCCESS)
+            {
+                if (RTD.get_last_received_reading() > -1000.0)
+                {
+                    aai_publish(TOPIC_TEMP, String(RTD.get_last_received_reading(), 2));
+                }
+                else
+                {
+                    aai_publish(TOPIC_TEMP, String(25.0));
+                }
+            }
+            else
+            {
+                Serial.println("reading error");
+            }
+        }
+    }
+}
+
+void set_clock()
+{
+    configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+    Serial.print("Waiting for NTP time sync: ");
+    time_t now = time(nullptr);
+    while (now < 8 * 3600 * 2)
+    {
+        delay(500);
+        Serial.print(".");
+        now = time(nullptr);
+    }
+    Serial.println("");
+    struct tm timeinfo;
+    gmtime_r(&now, &timeinfo);
+    Serial.print("Current time: ");
+    Serial.print(asctime(&timeinfo));
+}
