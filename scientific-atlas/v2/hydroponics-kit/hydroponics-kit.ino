@@ -10,6 +10,9 @@
 // ------------ Start Configuration ------------ //
 const char *WIFI_SSID = "";
 const char *WIFI_PASSWORD = "";
+
+// You can get the following variables from the
+// FarmHub dashboard under the "Sensors" tab
 const char THINGNAME[] = "";
 const char TOPIC_PH[] = "";
 const char TOPIC_EC[] = "";
