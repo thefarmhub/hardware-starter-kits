@@ -1,10 +1,10 @@
 #include <iot_cmd.h>
-#include <ESP8266WiFi.h>
+#include <WiFiClientSecure.h>
 #include <sequencer4.h>
 #include <sequencer1.h>
 #include <Wire.h>
 #include <Ezo_i2c_util.h>
-#include <Ezo_i2c.h>      // include the EZO I2C library from https://github.com/Atlas-Scientific/Ezo_I2c_lib
+#include <Ezo_i2c.h>      // https://github.com/Atlas-Scientific/Ezo_I2c_lib
 #include <PubSubClient.h> // https://github.com/knolleary/pubsubclient
 
 // ------------ Start Configuration ------------ //
@@ -47,12 +47,8 @@ rqXRfboQnoZsG4q5WTP468SQvvG5
 const char FARMHUB_IOT_ENDPOINT[] = "iot.farmhub.ag";
 // ------------ End Configuration ------------ //
 
-WiFiClient client;
+WiFiClientSecure wifiClient;
 PubSubClient pubsubClient(wifiClient);
-
-BearSSL::X509List cert(FARMHUB_CERT_CA);
-BearSSL::X509List client_crt(FARMHUB_CERT_CRT);
-BearSSL::PrivateKey key(FARMHUB_CERT_PRIVATE);
 
 Ezo_board PH = Ezo_board(99, "PH");
 Ezo_board EC = Ezo_board(100, "EC");
@@ -228,13 +224,11 @@ void step2()
     { // if the temperature reading has been received and it is valid
         PH.send_cmd_with_num("T,", RTD.get_last_received_reading());
         EC.send_cmd_with_num("T,", RTD.get_last_received_reading());
-        ThingSpeak.setField(3, String(RTD.get_last_received_reading(), 2)); // assign temperature readings to the third column of thingspeak channel
     }
     else
     {                                     // if the temperature reading is invalid
         PH.send_cmd_with_num("T,", 25.0); // send default temp = 25 deg C to PH sensor
         EC.send_cmd_with_num("T,", 25.0);
-        ThingSpeak.setField(3, String(25.0, 2)); // assign temperature readings to the third column of thingspeak channel
     }
 
     Serial.print(" ");
@@ -363,8 +357,9 @@ void farmhub_connect()
     {
         Serial.print("Connecting to FarmHub... ");
 
-        wifiClient.setTrustAnchors(&cert);
-        wifiClient.setClientRSACert(&client_crt, &key);
+        wifiClient.setCACert(FARMHUB_CERT_CA);
+        wifiClient.setCertificate(FARMHUB_CERT_CRT);
+        wifiClient.setPrivateKey(FARMHUB_CERT_PRIVATE);
 
         pubsubClient.setServer(FARMHUB_IOT_ENDPOINT, 8883);
 
