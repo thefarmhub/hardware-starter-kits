@@ -81,7 +81,7 @@ const int EN_AUX = 33;
 //------------------------------------------------------------------
 
 const unsigned long reading_delay = 1000;  // how long we wait to receive a response, in milliseconds
-const unsigned long farmhub_delay = 15000; // how long we wait to send values to thingspeak, in milliseconds
+const unsigned long farmhub_delay = 15000; // how long we wait to send values to farmhub, in milliseconds
 
 unsigned int poll_delay = 2000 - reading_delay * 2 - 300; // how long to wait between polls after accounting for the times it takes to send readings
 
@@ -94,7 +94,7 @@ unsigned int poll_delay = 2000 - reading_delay * 2 - 300; // how long to wait be
 
 float k_val = 0;             // holds the k value for determining what to print in the help menu
 bool polling = true;         // variable to determine whether or not were polling the circuits
-bool send_to_farmhub = true; // variable to determine whether or not were sending data to thingspeak
+bool send_to_farmhub = true; // variable to determine whether or not were sending data to farmhub
 
 bool wifi_isconnected()
 {
