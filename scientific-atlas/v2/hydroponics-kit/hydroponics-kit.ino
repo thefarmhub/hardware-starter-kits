@@ -92,8 +92,7 @@ unsigned int poll_delay = 2000 - reading_delay * 2 - 300; // how long to wait be
 #define IS_GREATER_THAN true  // true means the circuit's reading has to be greater than the comparison value, false mean it has to be less than
 #define COMPARISON_VALUE 1000 // the threshold above or below which the pump is activated
 
-float k_val = 0; // holds the k value for determining what to print in the help menu
-
+float k_val = 0;             // holds the k value for determining what to print in the help menu
 bool polling = true;         // variable to determine whether or not were polling the circuits
 bool send_to_farmhub = true; // variable to determine whether or not were sending data to thingspeak
 
@@ -151,7 +150,6 @@ void setup()
 void loop()
 {
     String cmd;
-
     wifi_sequence.run();
 
     if (receive_command(cmd))
@@ -164,72 +162,53 @@ void loop()
         }
     }
 
-    if (polling == true)
+    if (polling)
     {
         sensor_sequence.run();
         farmhub_sequence.run();
     }
 }
 
-// function that controls the pumps activation and output
 void pump_function(Ezo_board &pump, Ezo_board &sensor, float value, float dose, bool greater_than)
 {
-    if (sensor.get_error() == Ezo_board::SUCCESS)
-    {                            // make sure we have a valid reading before we make any decisions
-        bool comparison = false; // variable for holding the reuslt of the comparison
-        if (greater_than)
-        {                                                               // we do different comparisons depending on what the user wants
-            comparison = (sensor.get_last_received_reading() >= value); // compare the reading of the circuit to the comparison value to determine whether we actiavte the pump
-        }
-        else
-        {
-            comparison = (sensor.get_last_received_reading() <= value);
-        }
-        if (comparison)
-        {                                       // if the result of the comparison means we should activate the pump
-            pump.send_cmd_with_num("d,", dose); // dispense the dose
-            delay(100);                         // wait a few milliseconds before getting pump results
-            Serial.print(pump.get_name());      // get pump data to tell the user if the command was received successfully
-            Serial.print(" ");
-            char response[20];
-            if (pump.receive_cmd(response, 20) == Ezo_board::SUCCESS)
-            {
-                Serial.print("pump dispensed ");
-            }
-            else
-            {
-                Serial.print("pump error ");
-            }
-            Serial.println(response);
-        }
-        else
-        {
-            pump.send_cmd("x"); // if we're not supposed to dispense, stop the pump
-        }
+    if (sensor.get_error() != Ezo_board::SUCCESS)
+        return;
+
+    bool comparison = (greater_than ? (sensor.get_last_received_reading() >= value) : (sensor.get_last_received_reading() <= value));
+    if (comparison)
+    {
+        pump.send_cmd_with_num("d,", dose);
+        delay(100);
+        Serial.print(pump.get_name());
+        Serial.print(" ");
+
+        char response[20];
+        Serial.print("pump ");
+        Serial.println(pump.receive_cmd(response, 20) == Ezo_board::SUCCESS ? "dispensed" : "error");
+    }
+    else
+    {
+        pump.send_cmd("x");
     }
 }
 
 void step1()
 {
-    // send a read command. we use this command instead of RTD.send_cmd("R");
-    // to let the library know to parse the reading
     RTD.send_read_cmd();
 }
 
 void step2()
 {
-    receive_and_print_reading(RTD); // get the reading from the RTD circuit
+    receive_and_print_reading(RTD);
 
-    if ((RTD.get_error() == Ezo_board::SUCCESS) && (RTD.get_last_received_reading() > -1000.0))
-    { // if the temperature reading has been received and it is valid
-        PH.send_cmd_with_num("T,", RTD.get_last_received_reading());
-        EC.send_cmd_with_num("T,", RTD.get_last_received_reading());
+    float temperature = RTD.get_last_received_reading();
+    if (RTD.get_error() != Ezo_board::SUCCESS || temperature <= -1000.0)
+    {
+        temperature = 25.0;
     }
-    else
-    {                                     // if the temperature reading is invalid
-        PH.send_cmd_with_num("T,", 25.0); // send default temp = 25 deg C to PH sensor
-        EC.send_cmd_with_num("T,", 25.0);
-    }
+
+    PH.send_cmd_with_num("T,", temperature);
+    EC.send_cmd_with_num("T,", temperature);
 
     Serial.print(" ");
 }
@@ -267,33 +246,29 @@ bool process_coms(const String &string_buffer)
         print_help();
         return true;
     }
-    else if (string_buffer.startsWith("DATALOG"))
+
+    if (string_buffer.startsWith("DATALOG"))
     {
         start_datalogging();
         return true;
     }
-    else if (string_buffer.startsWith("POLL"))
+
+    if (string_buffer.startsWith("POLL"))
     {
         polling = true;
         sensor_sequence.reset();
 
         int16_t index = string_buffer.indexOf(',');
-        if (index != -1)
+        if (index != -1 && string_buffer.substring(index + 1).toFloat() >= ((reading_delay * 2 + 300) / 1000.0))
         {
-            float new_delay = string_buffer.substring(index + 1).toFloat();
-
-            float mintime = reading_delay * 2 + 300;
-            if (new_delay >= (mintime / 1000.0))
-            {
-                sensor_sequence.set_step4_time((new_delay * 1000.0) - mintime);
-            }
-            else
-            {
-                Serial.println("delay too short");
-            }
+            sensor_sequence.set_step4_time((string_buffer.substring(index + 1).toFloat() * 1000.0) - (reading_delay * 2 + 300));
+            return true;
         }
+
+        Serial.println("delay too short");
         return true;
     }
+
     return false;
 }
 
@@ -311,44 +286,47 @@ void get_ec_k_value()
 void print_help()
 {
     get_ec_k_value();
-    Serial.println(F("Atlas Scientific I2C hydroponics kit                                       "));
-    Serial.println(F("Commands:                                                                  "));
-    Serial.println(F("datalog      Takes readings of all sensors every 15 sec send to thingspeak "));
-    Serial.println(F("             Entering any commands stops datalog mode.                     "));
-    Serial.println(F("poll         Takes readings continuously of all sensors                    "));
-    Serial.println(F("                                                                           "));
-    Serial.println(F("ph:cal,mid,7     calibrate to pH 7                                         "));
-    Serial.println(F("ph:cal,low,4     calibrate to pH 4                                         "));
-    Serial.println(F("ph:cal,high,10   calibrate to pH 10                                        "));
-    Serial.println(F("ph:cal,clear     clear calibration                                         "));
-    Serial.println(F("                                                                           "));
-    Serial.println(F("ec:cal,dry           calibrate a dry EC probe                              "));
-    Serial.println(F("ec:k,[n]             used to switch K values, standard probes values are 0.1, 1, and 10 "));
-    Serial.println(F("ec:cal,clear         clear calibration                                     "));
+
+    Serial.println(F("Atlas Scientific I2C hydroponics kit"));
+    Serial.println(F("Commands:"));
+    Serial.println(F("datalog - Takes readings of all sensors every 15 sec and sends to ThingSpeak. Entering any commands stops datalog mode."));
+    Serial.println(F("poll - Takes readings continuously of all sensors."));
+    Serial.println(F(""));
+    Serial.println(F("pH calibration:"));
+    Serial.println(F("ph:cal,mid,7 - Calibrate to pH 7."));
+    Serial.println(F("ph:cal,low,4 - Calibrate to pH 4."));
+    Serial.println(F("ph:cal,high,10 - Calibrate to pH 10."));
+    Serial.println(F("ph:cal,clear - Clear calibration."));
+    Serial.println(F(""));
+    Serial.println(F("EC calibration:"));
+    Serial.println(F("ec:cal,dry - Calibrate a dry EC probe."));
+    Serial.println(F("ec:k,[n] - Switch K values. Standard probes values are 0.1, 1, and 10."));
+    Serial.println(F("ec:cal,clear - Clear calibration."));
 
     if (k_val > 9)
     {
-        Serial.println(F("For K10 probes, these are the recommended calibration values:            "));
-        Serial.println(F("  ec:cal,low,12880     calibrate EC probe to 12,880us                    "));
-        Serial.println(F("  ec:cal,high,150000   calibrate EC probe to 150,000us                   "));
+        Serial.println(F("For K10 probes, the recommended calibration values are:"));
+        Serial.println(F("ec:cal,low,12880 - Calibrate EC probe to 12,880us."));
+        Serial.println(F("ec:cal,high,150000 - Calibrate EC probe to 150,000us."));
     }
     else if (k_val > .9)
     {
-        Serial.println(F("For K1 probes, these are the recommended calibration values:             "));
-        Serial.println(F("  ec:cal,low,12880     calibrate EC probe to 12,880us                    "));
-        Serial.println(F("  ec:cal,high,80000    calibrate EC probe to 80,000us                    "));
+        Serial.println(F("For K1 probes, the recommended calibration values are:"));
+        Serial.println(F("ec:cal,low,12880 - Calibrate EC probe to 12,880us."));
+        Serial.println(F("ec:cal,high,80000 - Calibrate EC probe to 80,000us."));
     }
     else if (k_val > .09)
     {
-        Serial.println(F("For K0.1 probes, these are the recommended calibration values:           "));
-        Serial.println(F("  ec:cal,low,84        calibrate EC probe to 84us                        "));
-        Serial.println(F("  ec:cal,high,1413     calibrate EC probe to 1413us                      "));
+        Serial.println(F("For K0.1 probes, the recommended calibration values are:"));
+        Serial.println(F("ec:cal,low,84 - Calibrate EC probe to 84us."));
+        Serial.println(F("ec:cal,high,1413 - Calibrate EC probe to 1413us."));
     }
 
-    Serial.println(F("                                                                           "));
-    Serial.println(F("rtd:cal,t            calibrate the temp probe to any temp value            "));
-    Serial.println(F("                     t= the temperature you have chosen                    "));
-    Serial.println(F("rtd:cal,clear        clear calibration                                     "));
+    Serial.println(F(""));
+    Serial.println(F("Temperature calibration:"));
+    Serial.println(F("rtd:cal,t - Calibrate the temp probe to any temp value."));
+    Serial.println(F("  t = the temperature you have chosen."));
+    Serial.println(F("rtd:cal,clear - Clear calibration."));
 }
 
 void farmhub_connect()
@@ -380,96 +358,82 @@ void farmhub_connect()
 
 void farmhub_publish(const char *topic, String value)
 {
-    if (value == "")
+    if (value.empty())
     {
-        Serial.println("failed [empty value]");
+        Serial.println("empty value, skipping");
         return;
     }
 
-    time_t now;
-    time(&now);
     char buf[sizeof "2020-01-01T00:00:01Z"];
-    strftime(buf, sizeof buf, "%FT%TZ", gmtime(&now));
-
+    strftime(buf, sizeof buf, "%FT%TZ", gmtime(&(time_t){time(nullptr)}));
     String payload = "{\"v\":" + value + ",\"dt\":\"" + buf + "\"}";
+
     Serial.println(payload);
-    if (pubsubClient.publish(topic, payload.c_str()))
-    {
-        Serial.println("success");
-    }
-    else
-    {
-        Serial.println("failed");
-    }
+    pubsubClient.publish(topic, payload.c_str()) ? Serial.println("success") : Serial.println("failed");
 }
 
 void farmhub_send()
 {
-    if (send_to_farmhub == true)
+    if (!send_to_farmhub)
+        return;
+
+    farmhub_connect();
+
+    if (!wifi_isconnected())
+        return;
+
+    Serial.println("Sending data to FarmHub...");
+
+    Serial.print("EC: ");
+    if (EC.get_error() == Ezo_board::SUCCESS)
     {
-        farmhub_connect();
+        farmhub_publish(TOPIC_EC, String(EC.get_last_received_reading(), 2));
+    }
+    else
+    {
+        Serial.println("reading error");
+    }
 
-        if (wifi_isconnected())
+    Serial.print("PH: ");
+    if (PH.get_error() == Ezo_board::SUCCESS)
+    {
+        farmhub_publish(TOPIC_PH, String(PH.get_last_received_reading(), 2));
+    }
+    else
+    {
+        Serial.println("reading error");
+    }
+
+    Serial.print("RTD: ");
+    if (RTD.get_error() == Ezo_board::SUCCESS)
+    {
+        if (RTD.get_last_received_reading() > -1000.0)
         {
-            Serial.println("Sending data to FarmHub...");
-
-            Serial.print("EC: ");
-            if (EC.get_error() == Ezo_board::SUCCESS)
-            {
-                farmhub_publish(TOPIC_EC, String(EC.get_last_received_reading(), 2));
-            }
-            else
-            {
-                Serial.println("reading error");
-            }
-
-            Serial.print("PH: ");
-            if (PH.get_error() == Ezo_board::SUCCESS)
-            {
-                farmhub_publish(TOPIC_PH, String(PH.get_last_received_reading(), 2));
-            }
-            else
-            {
-                Serial.println("reading error");
-            }
-
-            Serial.print("RTD: ");
-            if (RTD.get_error() == Ezo_board::SUCCESS)
-            {
-                if (RTD.get_last_received_reading() > -1000.0)
-                {
-                    farmhub_publish(TOPIC_TEMP, String(RTD.get_last_received_reading(), 2));
-                }
-                else
-                {
-                    farmhub_publish(TOPIC_TEMP, String(25.0));
-                }
-            }
-            else
-            {
-                Serial.println("reading error");
-            }
+            farmhub_publish(TOPIC_TEMP, String(RTD.get_last_received_reading(), 2));
         }
+        else
+        {
+            farmhub_publish(TOPIC_TEMP, String(25.0));
+        }
+    }
+    else
+    {
+        Serial.println("reading error");
     }
 }
 
 void set_clock()
 {
     configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
-    Serial.print("Waiting for NTP time sync: ");
 
-    time_t now = time(nullptr);
-    while (now < 8 * 3600 * 2)
+    Serial.print("Waiting for NTP time sync...");
+    while (time(nullptr) < 8 * 3600 * 2)
     {
         delay(500);
         Serial.print(".");
-        now = time(nullptr);
     }
 
-    Serial.println("");
-    struct tm timeinfo;
-    gmtime_r(&now, &timeinfo);
-
+    Serial.println();
     Serial.print("Current time: ");
-    Serial.print(asctime(&timeinfo));
+    Serial.print(asctime(gmtime_r(&now, &timeinfo)));
 }
