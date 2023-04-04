@@ -361,14 +361,17 @@ void farmhub_connect()
 
 void farmhub_publish(const char *topic, String value)
 {
-    if (value.empty())
+    if (value.isEmpty())
     {
         Serial.println("empty value, skipping");
         return;
     }
 
+    time_t now;
+    time(&now);
     char buf[sizeof "2020-01-01T00:00:01Z"];
-    strftime(buf, sizeof buf, "%FT%TZ", gmtime(&(time_t){time(nullptr)}));
+    strftime(buf, sizeof buf, "%FT%TZ", gmtime(&now));
+
     String payload = "{\"v\":" + value + ",\"dt\":\"" + buf + "\"}";
 
     Serial.println(payload);
@@ -428,15 +431,17 @@ void farmhub_send()
 void set_clock()
 {
     configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
-
-    Serial.print("Waiting for NTP time sync...");
-    while (time(nullptr) < 8 * 3600 * 2)
+    Serial.print("Waiting for NTP time sync: ");
+    time_t now = time(nullptr);
+    while (now < 8 * 3600 * 2)
     {
         delay(500);
         Serial.print(".");
+        now = time(nullptr);
     }
-
-    Serial.println();
+    Serial.println("");
+    struct tm timeinfo;
+    gmtime_r(&now, &timeinfo);
     Serial.print("Current time: ");
-    Serial.print(asctime(gmtime_r(&now, &timeinfo)));
+    Serial.print(asctime(&timeinfo));
 }
