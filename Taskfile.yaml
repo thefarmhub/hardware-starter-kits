@@ -1,0 +1,37 @@
+version: "3"
+
+vars:
+  FQBN: esp32:esp32:featheresp32
+  SERIAL_PORT:
+    sh: arduino-cli board list | grep usbserial | awk '{print $1}'
+
+tasks:
+  setup:
+    cmds:
+      - task: cli:install
+      - cmd: arduino-cli core update-index
+      - cmd: arduino-cli core install esp32:esp32
+      - task: plugins:install
+
+  plugins:install:
+    cmds:
+      # https://github.com/bblanchon/ArduinoJson
+      - arduino-cli lib install ArduinoJson@6.21.2
+
+  cli:install:
+    cmds:
+      - brew install arduino-cli
+    status:
+      - command -v arduino-cli
+
+  compile:
+    cmds:
+      - arduino-cli compile --fqbn {{.FQBN}} {{.CLI_ARGS}}
+
+  upload:
+    cmds:
+      - arduino-cli upload -p "{{.SERIAL_PORT}}" --fqbn {{.FQBN}} {{.CLI_ARGS}}
+
+  monitor:
+    cmds:
+      - arduino-cli monitor -p "{{.SERIAL_PORT}}"
