@@ -103,7 +103,7 @@ void reconnect_wifi()
     if (!wifi_isconnected())
     {
         WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-        Serial.println("connecting to wifi");
+        Serial.println("Connecting to WiFi...");
     }
 }
 

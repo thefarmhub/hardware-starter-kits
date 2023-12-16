@@ -35,3 +35,9 @@ tasks:
   monitor:
     cmds:
       - arduino-cli monitor -p "{{.SERIAL_PORT}}"
+
+  dev:
+    cmds:
+      - task: compile
+      - task: upload
+      - task: monitor
