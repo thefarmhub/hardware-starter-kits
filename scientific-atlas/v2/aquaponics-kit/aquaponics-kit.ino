@@ -22,18 +22,18 @@ const char TOPIC_HUM[] = "{{- .TopicHUM -}}";
 const char TOPIC_CO2[] = "{{- .TopicCO2 -}}";
 
 static const char FARMHUB_CERT_CRT[] PROGMEM = R"KEY(
-{{- .CertificatePEM -}}
+{{ .CertificatePEM }}
 )KEY";
 
 static const char FARMHUB_CERT_PRIVATE[] PROGMEM = R"KEY(
-{{- .CertificatePrivateKey -}}
+{{ .CertificatePrivateKey }}
 )KEY";
 
 static const char FARMHUB_CERT_CA[] PROGMEM = R"EOF(
-{{- .RootCertificateAuthority -}}
+{{ .RootCertificateAuthority }}
 )EOF";
 
-const char FARMHUB_IOT_ENDPOINT[] = "{{- .IotEndpoint -}}}}";
+const char FARMHUB_IOT_ENDPOINT[] = "{{- .IotEndpoint -}}";
 // ------------ End Configuration ------------ //
 
 WiFiClientSecure wifiClient;
