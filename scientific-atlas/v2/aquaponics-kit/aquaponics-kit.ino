@@ -33,7 +33,7 @@ static const char FARMHUB_CERT_CA[] PROGMEM = R"EOF(
 {{- .RootCertificateAuthority -}}
 )EOF";
 
-const char FARMHUB_IOT_ENDPOINT[] = "iot.farmhub.ag";
+const char FARMHUB_IOT_ENDPOINT[] = "{{- .IotEndpoint -}}}}";
 // ------------ End Configuration ------------ //
 
 WiFiClientSecure wifiClient;
